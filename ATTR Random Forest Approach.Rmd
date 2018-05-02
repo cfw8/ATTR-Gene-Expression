@@ -1,0 +1,272 @@
+---
+title: "TTR Amyloidosis (Limma Approch)"
+output: html_document
+---
+
+```{r, echo=TRUE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(limma) # See if this reads our data, start playing around
+library(randomForest) 
+
+setwd("~/Dropbox/Gene_Signatures_Code")
+```
+
+## Read in data from directory & merge data files
+
+```{r, echo=TRUE}
+geneExpressionData <- read_tsv("GSE67784.txt.gz")
+colnames(geneExpressionData)[1] <- "SampleID"
+
+metaData <- read_csv("Metadata/Ensembl87_Biomart_GRCh38.p7.csv")
+colnames(metaData)[1] <- "Gene"
+colnames(metaData)[2] <- "Chromosome"
+colnames(metaData)[3] <- "GeneSymbol"
+
+# Remove unnecessary column
+metaData <- select(metaData, -4)
+
+metaData <- filter(metaData, metaData$Chromosome %in% c(1:22, "X", "Y"), !is.na(metaData$GeneSymbol))
+# filteredMetaData <- filter(metaData, metaData$Chromosome %in% c(1:22))
+
+metaData$Chromosome <- factor(metaData$Chromosome)
+# filteredMetaData$Chromosome <- factor(filteredMetaData$Chromosome)
+```
+
+## Write a function to create separate datasets
+
+```{r,}
+getClassData <- function(geneExpressionData, classFile) {
+  classData <- read_tsv(classFile)
+  classData$Class <- factor(classData$Class)
+
+  mergedData <- inner_join(classData, geneExpressionData)
+
+  return(mergedData)
+}
+```
+
+## Age Data
+```{r}
+ageData <- read_tsv("PatientCharacteristic__age.txt")
+
+```
+
+## Create separate datasets, combine them
+
+```{r}
+asymptomaticMergedData <- getClassData(geneExpressionData, "Class/Asymptomatic__gender.txt")
+symptomaticMergedData <- getClassData(geneExpressionData, "Class/Symptomatic__gender.txt")
+treatedMergedData <- getClassData(geneExpressionData, "Class/Treated__gender.txt")
+onlycontrolsMergedData <- getClassData(geneExpressionData, "Class/Only_Controls__gender.txt")
+
+asymptomaticData <- cbind("A", asymptomaticMergedData)
+colnames(asymptomaticData)[1] <- "Type"
+symptomaticData <- cbind("S", symptomaticMergedData)
+colnames(symptomaticData)[1] <- "Type"
+treatedData <- cbind("T", treatedMergedData)
+colnames(treatedData)[1] <- "Type"
+controlsData <- cbind("C", onlycontrolsMergedData)
+colnames(controlsData)[1] <- "Type"
+
+combData <- rbind(asymptomaticData, symptomaticData, treatedData, controlsData)
+fullData <- inner_join(ageData, combData)
+# I don't have the age for the treated patients
+```
+
+## ANOVA function--don't need it
+```{r}
+getAnova <- function(gene) {
+  x1 <- fullData$age
+  x2 <- fullData$Class
+  x3 <- fullData$Type
+  mod <- lm(gene~x1+x2+x3+x1*x2+x2*x3+x1*x3)
+  anova(mod)
+}
+
+getAnova(fullData$ENSG00000000005)
+
+```
+
+
+## Get p-values
+```{r}
+nGenes <- ncol(fullData) - 4
+geneMatrix <- as.matrix(fullData[,5:nGenes + 4], ncol=nGenes)
+
+p1 <- rep(NA,nGenes)
+p2 <- rep(NA,nGenes)
+p3 <- rep(NA,nGenes)
+p4 <- rep(NA,nGenes)
+p5 <- rep(NA,nGenes)
+p6 <- rep(NA,nGenes)
+
+x1 <- fullData$age
+x2 <- fullData$Class
+x3 <- fullData$Type
+
+for (i in 1:ncol(geneMatrix)) {
+    y <- geneMatrix[,i] 
+    mod <- lm(y~x1+x2+x3+x1*x2+x2*x3+x1*x3)
+    p1[i] <- anova(mod)[1,5]
+    p2[i] <- anova(mod)[2,5]
+    p3[i] <- anova(mod)[3,5]
+    p4[i] <- anova(mod)[4,5]
+    p5[i] <- anova(mod)[5,5]
+    p6[i] <- anova(mod)[6,5]
+}
+
+results <- list(p1,p2,p3,p4,p5,p6)
+
+```
+
+## Get Significant Genes
+```{r, }
+geneNames <- colnames(fullData)[5:(ncol(fullData))] 
+  
+pValueData1 <- data.frame(Gene=geneNames,p1)
+pValueData2 <- data.frame(Gene=geneNames,p2)
+pValueData3 <- data.frame(Gene=geneNames,p3)
+pValueData4 <- data.frame(Gene=geneNames,p4)
+pValueData5 <- data.frame(Gene=geneNames,p5)
+pValueData6 <- data.frame(Gene=geneNames,p6)
+
+pValueData1$Gene <- as.character(pValueData1$Gene)
+pValueData2$Gene <- as.character(pValueData2$Gene)
+pValueData3$Gene <- as.character(pValueData3$Gene)
+pValueData4$Gene <- as.character(pValueData4$Gene)
+pValueData5$Gene <- as.character(pValueData5$Gene)
+pValueData6$Gene <- as.character(pValueData6$Gene)
+
+pValueDF1 <- inner_join(metaData, pValueData1)
+pValueDF1 <- arrange(pValueDF1, p1)
+colnames(pValueDF1)[4] <- "PValue"
+pValueDF2 <- inner_join(metaData, pValueData2)
+pValueDF2 <- arrange(pValueDF2, p2)
+colnames(pValueDF2)[4] <- "PValue"
+pValueDF3 <- inner_join(metaData, pValueData3)
+pValueDF3 <- arrange(pValueDF3, p3)
+colnames(pValueDF3)[4] <- "PValue"
+pValueDF4 <- inner_join(metaData, pValueData4)
+pValueDF4 <- arrange(pValueDF4, p4)
+colnames(pValueDF4)[4] <- "PValue"
+pValueDF5 <- inner_join(metaData, pValueData5)
+pValueDF5 <- arrange(pValueDF5, p5)
+colnames(pValueDF5)[4] <- "PValue"
+pValueDF6 <- inner_join(metaData, pValueData6)
+pValueDF6 <- arrange(pValueDF6, p6)
+colnames(pValueDF6)[4] <- "PValue"
+
+
+```
+
+
+## Make Barplot for p1
+```{r}
+createBarplot <- function(pValueDF) {
+  
+  tempDataFrame <- subset(pValueDF, select=c("Chromosome", "Gene", "PValue"))
+
+  for(i in 1:nrow(tempDataFrame)) {
+      ifelse(tempDataFrame$PValue[i]<=.05, tempDataFrame$PValue[i] <- "Yes", tempDataFrame$PValue[i] <- "No")
+  }
+
+  df <- data.frame(tempDataFrame)
+  df <- group_by(df, Chromosome, PValue)
+
+  propPlot <- ggplot(df, aes(x=Chromosome, fill=PValue)) + geom_bar() + ggtitle("Significant Genes") 
+  return(propPlot)
+}
+
+createBarplot(pValueDF1)
+createBarplot(pValueDF2)
+createBarplot(pValueDF3)
+createBarplot(pValueDF4)
+createBarplot(pValueDF5)
+createBarplot(pValueDF6)
+```
+
+
+## Decision Trees using most sig genes
+```{r}
+pValueDF1$PValue <- pValueDF1$PValue[order(pValueDF1$PValue)]
+sbst <- pValueDF1$Gene[1:14000]
+fullDataSub <- fullData[,c("age", "Type", "Class", sbst)] 
+fullDataSub$Type <- as.factor(as.character(fullDataSub$Type))
+
+fitGE <- randomForest(fullDataSub$Type ~ ., importance=TRUE, ntree=2000, data=fullDataSub)
+
+predType <- predict(fitGE)
+t1 <- table(predType, fullDataSub$Type)
+correct.rate1 <- (t1[1,1]+t1[2,2]+t1[3,3])/sum(t1)
+correct.rate1
+```
+
+## Decision trees using random genes
+```{r}
+smpl <- sample(pValueDF1$Gene, 14000)
+fullDataSample <- fullData[,c("age", "Type", "Class", smpl)] 
+fullDataSample$Type <- as.factor(as.character(fullDataSample$Type))
+
+
+fitGE2 <- randomForest(fullDataSample$Type ~ ., importance=TRUE, ntree=10000, data=fullDataSample)
+predType2 <- predict(fitGE2)
+t2 <- table(predType2, fullDataSample$Type)
+correct.rate2 <- (t2[1,1]+t2[2,2]+t2[3,3])/sum(t2)
+correct.rate2
+```
+
+## Decision trees without gender
+```{r}
+smpl1 <- sample(pValueDF1$Gene, 14000)
+fullDataSample1 <- fullData[,c("age", "Type", smpl1)] 
+fullDataSample1$Type <- as.factor(as.character(fullDataSample1$Type))
+
+fitGE3 <- randomForest(fullDataSample1$Type ~ ., importance=TRUE, ntree=10000, data=fullDataSample1)
+predType3 <- predict(fitGE3)
+t3 <- table(predType3, fullDataSample1$Type)
+correct.rate3 <- (t3[1,1]+t3[2,2]+t3[3,3])/sum(t3)
+correct.rate3
+```
+
+## Decision Trees using a random sample and save each rate in a vector
+```{r}
+randoFunction <- function() {
+  samp <- sample(pValueDF1$Gene, 20)
+  fullDataSamp <- fullData[,c("age", "Type", samp)] 
+  fullDataSamp$Type <- as.factor(as.character(fullDataSamp$Type))
+
+  fitGE <- randomForest(fullDataSamp$Type ~ ., importance=TRUE, ntree=10000, data=fullDataSamp)
+  predType <- predict(fitGE3)
+  t <- table(predType3, fullDataSamp$Type)
+  correct.rate <- (t[1,1]+t[2,2]+t[3,3])/sum(t)
+  return(correct.rate)
+}
+smthg <- sapply(1:10, function(x) randoFunction())
+var(smthg)
+
+```
+
+
+
+```{r}
+geneExpressionData2 <- ExpressionSet(t(as.matrix(geneExpressionData)))
+fit3 <- lmFit(geneExpressionData2, mat)
+
+mat <- model.matrix(~ aData$Class+aData$age) 
+fit <- lmFit(asymptomaticMergedData$ENSG00000000003, mat) # Adjust for age
+#fit <- lmFit(poly(asymptomaticMergedData$ENSG00000000003, degree=2))
+summary(fit)
+
+tstat.ord <- fit$coef/fit$stdev.unscaled/fit$sigma
+fit2 <- eBayes(fit) #The output from eBayes() contains s0^2 and d0 as fit$s2.prior and fit$df.prior and the ˜sj^2
+# as fit$s2.post
+topTable(fit)
+# decideTests() # input object is a matrix of p-values
+
+#plot(asymptomaticMergedData$Class, asymptomaticMergedData$ENSG00000000003, ylab = "Expression", xlab = "Class", pch = 19)
+```
+
+
+
