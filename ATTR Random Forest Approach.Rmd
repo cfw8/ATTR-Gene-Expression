@@ -1,5 +1,5 @@
 ---
-title: "TTR Amyloidosis (Limma Approch)"
+title: "TTR Amyloidosis (Random Forest Approch)"
 output: html_document
 ---
 
@@ -121,6 +121,7 @@ results <- list(p1,p2,p3,p4,p5,p6)
 
 ```
 
+
 ## Get Significant Genes
 ```{r, }
 geneNames <- colnames(fullData)[5:(ncol(fullData))] 
@@ -190,49 +191,71 @@ createBarplot(pValueDF6)
 
 ## Decision Trees using most sig genes
 ```{r}
-pValueDF1$PValue <- pValueDF1$PValue[order(pValueDF1$PValue)]
-sbst <- pValueDF1$Gene[1:14000]
-fullDataSub <- fullData[,c("age", "Type", "Class", sbst)] 
-fullDataSub$Type <- as.factor(as.character(fullDataSub$Type))
+getRate1 <- function() {
+  pValueDF1$PValue <- pValueDF1$PValue[order(pValueDF1$PValue)]
+  sbst <- pValueDF1$Gene[1:1000]
+  fullDataSub <- fullData[,c("age", "Type", "Class", sbst)] 
+  fullDataSub$Type <- as.factor(as.character(fullDataSub$Type))
 
-fitGE <- randomForest(fullDataSub$Type ~ ., importance=TRUE, ntree=2000, data=fullDataSub)
+  fitGE <- randomForest(fullDataSub$Type ~ ., importance=TRUE, ntree=2000, data=fullDataSub)
 
-predType <- predict(fitGE)
-t1 <- table(predType, fullDataSub$Type)
-correct.rate1 <- (t1[1,1]+t1[2,2]+t1[3,3])/sum(t1)
-correct.rate1
+  predType <- predict(fitGE)
+  t1 <- table(predType, fullDataSub$Type)
+  correct.rate1 <- (t1[1,1]+t1[2,2]+t1[3,3])/sum(t1)
+  return(correct.rate1)
+}
+
+rateVector1 <- sapply(1:10, function(x) getRate1())
+var(rateVector1)
+# Why does this one have variance and not the other one?
 ```
+
+
 
 ## Decision trees using random genes
 ```{r}
-smpl <- sample(pValueDF1$Gene, 14000)
-fullDataSample <- fullData[,c("age", "Type", "Class", smpl)] 
-fullDataSample$Type <- as.factor(as.character(fullDataSample$Type))
+getRate2 <- function() {
+  smpl <- sample(pValueDF1$Gene, 1000)
+  fullDataSample <- fullData[,c("age", "Type", "Class", smpl)] 
+  fullDataSample$Type <- as.factor(as.character(fullDataSample$Type))
 
 
-fitGE2 <- randomForest(fullDataSample$Type ~ ., importance=TRUE, ntree=10000, data=fullDataSample)
-predType2 <- predict(fitGE2)
-t2 <- table(predType2, fullDataSample$Type)
-correct.rate2 <- (t2[1,1]+t2[2,2]+t2[3,3])/sum(t2)
-correct.rate2
+  fitGE2 <- randomForest(fullDataSample$Type ~ ., importance=TRUE, ntree=10000, data=fullDataSample)
+  predType2 <- predict(fitGE2)
+  t2 <- table(predType2, fullDataSample$Type)
+  correct.rate2 <- (t2[1,1]+t2[2,2]+t2[3,3])/sum(t2)
+  return(correct.rate2)
+}
+
+rateVector2 <- sapply(1:10, function(x) getRate2())
+var(rateVector2)
 ```
+
+
 
 ## Decision trees without gender
 ```{r}
-smpl1 <- sample(pValueDF1$Gene, 14000)
-fullDataSample1 <- fullData[,c("age", "Type", smpl1)] 
-fullDataSample1$Type <- as.factor(as.character(fullDataSample1$Type))
+getRate3 <- function() {
+  smpl1 <- sample(pValueDF1$Gene, 1000)
+  fullDataSample1 <- fullData[,c("age", "Type", smpl1)] 
+  fullDataSample1$Type <- as.factor(as.character(fullDataSample1$Type))
 
-fitGE3 <- randomForest(fullDataSample1$Type ~ ., importance=TRUE, ntree=10000, data=fullDataSample1)
-predType3 <- predict(fitGE3)
-t3 <- table(predType3, fullDataSample1$Type)
-correct.rate3 <- (t3[1,1]+t3[2,2]+t3[3,3])/sum(t3)
-correct.rate3
+  fitGE3 <- randomForest(fullDataSample1$Type ~ ., importance=TRUE, ntree=10000, data=fullDataSample1)
+  predType3 <- predict(fitGE3)
+  t3 <- table(predType3, fullDataSample1$Type)
+  correct.rate3 <- (t3[1,1]+t3[2,2]+t3[3,3])/sum(t3)
+  return(correct.rate3)
+}
+
+rateVector3 <- sapply(1:10, function(x) getRate3())
+var(rateVector3)
 ```
+
+
 
 ## Decision Trees using a random sample and save each rate in a vector
 ```{r}
-randoFunction <- function() {
+getRate <- function() {
   samp <- sample(pValueDF1$Gene, 20)
   fullDataSamp <- fullData[,c("age", "Type", samp)] 
   fullDataSamp$Type <- as.factor(as.character(fullDataSamp$Type))
@@ -243,13 +266,19 @@ randoFunction <- function() {
   correct.rate <- (t[1,1]+t[2,2]+t[3,3])/sum(t)
   return(correct.rate)
 }
-smthg <- sapply(1:10, function(x) randoFunction())
-var(smthg)
 
+rateVector <- sapply(1:10, function(x) getRate())
+var(rateVector)
 ```
 
 
 
+
+
+
+
+
+## Limma package
 ```{r}
 geneExpressionData2 <- ExpressionSet(t(as.matrix(geneExpressionData)))
 fit3 <- lmFit(geneExpressionData2, mat)
