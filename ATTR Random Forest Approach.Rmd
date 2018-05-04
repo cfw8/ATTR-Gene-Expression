@@ -72,22 +72,9 @@ colnames(controlsData)[1] <- "Type"
 
 combData <- rbind(asymptomaticData, symptomaticData, treatedData, controlsData)
 fullData <- inner_join(ageData, combData)
-# I don't have the age for the treated patients
+# I don't have the age data for the treated patients
 ```
 
-## ANOVA function--don't need it
-```{r}
-getAnova <- function(gene) {
-  x1 <- fullData$age
-  x2 <- fullData$Class
-  x3 <- fullData$Type
-  mod <- lm(gene~x1+x2+x3+x1*x2+x2*x3+x1*x3)
-  anova(mod)
-}
-
-getAnova(fullData$ENSG00000000005)
-
-```
 
 
 ## Get p-values
@@ -126,12 +113,12 @@ results <- list(p1,p2,p3,p4,p5,p6)
 ```{r, }
 geneNames <- colnames(fullData)[5:(ncol(fullData))] 
   
-pValueData1 <- data.frame(Gene=geneNames,p1)
-pValueData2 <- data.frame(Gene=geneNames,p2)
-pValueData3 <- data.frame(Gene=geneNames,p3)
-pValueData4 <- data.frame(Gene=geneNames,p4)
-pValueData5 <- data.frame(Gene=geneNames,p5)
-pValueData6 <- data.frame(Gene=geneNames,p6)
+pValueData1 <- data.frame(Gene=geneNames,p1)  # age
+pValueData2 <- data.frame(Gene=geneNames,p2)  # class
+pValueData3 <- data.frame(Gene=geneNames,p3)  # type
+pValueData4 <- data.frame(Gene=geneNames,p4)  # age and class
+pValueData5 <- data.frame(Gene=geneNames,p5)  # class and type
+pValueData6 <- data.frame(Gene=geneNames,p6)  # age and type
 
 pValueData1$Gene <- as.character(pValueData1$Gene)
 pValueData2$Gene <- as.character(pValueData2$Gene)
@@ -207,7 +194,6 @@ getRate1 <- function() {
 
 rateVector1 <- sapply(1:10, function(x) getRate1())
 var(rateVector1)
-# Why does this one have variance and not the other one?
 ```
 
 
@@ -256,13 +242,13 @@ var(rateVector3)
 ## Decision Trees using a random sample and save each rate in a vector
 ```{r}
 getRate <- function() {
-  samp <- sample(pValueDF1$Gene, 20)
+  samp <- sample(pValueDF1$Gene, 500)
   fullDataSamp <- fullData[,c("age", "Type", samp)] 
   fullDataSamp$Type <- as.factor(as.character(fullDataSamp$Type))
 
-  fitGE <- randomForest(fullDataSamp$Type ~ ., importance=TRUE, ntree=10000, data=fullDataSamp)
-  predType <- predict(fitGE3)
-  t <- table(predType3, fullDataSamp$Type)
+  fitGE <- randomForest(fullDataSamp$Type ~ ., importance=TRUE, ntree=500, data=fullDataSamp)
+  predType <- predict(fitGE)
+  t <- table(predType, fullDataSamp$Type)
   correct.rate <- (t[1,1]+t[2,2]+t[3,3])/sum(t)
   return(correct.rate)
 }
