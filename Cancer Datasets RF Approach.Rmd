@@ -1,0 +1,247 @@
+---
+title: "Colorectal Cancer Random Forest"
+output: html_document
+---
+
+## Load Libraries and set working directory
+```{r, echo=TRUE}
+library(randomForest) 
+library(caret)
+setwd("~/Dropbox/Gene_Signatures_Code")
+```
+
+
+## Read in data from directory & merge data files
+```{r, echo=TRUE}
+getGeneData <- function(data) {
+  geneExpressionData <- read_tsv(data)
+  colnames(geneExpressionData)[1] <- "SampleID"
+  return(geneExpressionData)
+}
+
+metaData <- read_csv("Metadata/Ensembl87_Biomart_GRCh38.p7.csv")
+colnames(metaData)[1] <- "Gene"
+colnames(metaData)[2] <- "Chromosome"
+colnames(metaData)[3] <- "GeneSymbol"
+
+# Remove unnecessary column
+metaData <- select(metaData, -4)
+
+metaData <- filter(metaData, metaData$Chromosome %in% c(1:22, "X", "Y"), !is.na(metaData$GeneSymbol))
+filteredMetaData <- filter(metaData, metaData$Chromosome %in% c(1:22))
+
+metaData$Chromosome <- factor((metaData$Chromosome))
+# Use filtered for barplot, regular for the dataframe
+filteredMetaData$Chromosome <- factor(as.numeric(filteredMetaData$Chromosome)) 
+
+```
+
+
+## Merge Class column
+```{r}
+getGenderData <- function(data) {
+  genderData <- data.frame(read_tsv(data))
+  genderData$Class <- factor(genderData[,2])
+
+  genderData$Class <- ifelse(genderData$Class=="0", genderData$Class <- "Male", genderData$Class <- "Female")
+
+  genderData <- genderData[,c(1,3)]
+  return(genderData)
+}
+```
+
+
+
+## Read in Data
+```{r}
+# Colorectal Cancer
+geneExpressionData <- getGeneData("GSE26682_U133A.txt.gz")
+genderData <- getGenderData("Class/U133A__gender.txt")
+coloMergedData <- inner_join(genderData, geneExpressionData)
+
+# Posterior Fossa Ependymoma
+geneExpressionData <- getGeneData("GSE27279.txt.gz")
+genderData <- getGenderData("Class/GSE27279__gender.txt")
+epeMergedData <- inner_join(genderData, geneExpressionData)
+
+# Smokers
+geneExpressionData <- getGeneData("GSE37147.txt.gz")
+genderData <- getGenderData("Class/GSE37147__gender.txt")
+smokeMergedData <- inner_join(genderData, geneExpressionData)
+
+# Lung Cancer
+geneExpressionData <- getGeneData("GSE37745.txt.gz")
+genderData <- getGenderData("Class/GSE37745__gender.txt")
+lungMergedData <- inner_join(genderData, geneExpressionData)
+
+# Stage I/II Colon Cancer
+geneExpressionData <- getGeneData("GSE37892.txt.gz")
+genderData <- getGenderData("Class/GSE37892__gender.txt")
+colMergedData <- inner_join(genderData, geneExpressionData)
+
+# Idiopathic Pulmonary Fibrosis
+geneExpressionData <- getGeneData("GSE38958.txt.gz")
+genderData <- getGenderData("Class/GSE38958__gender.txt")
+fibMergedData <- inner_join(genderData, geneExpressionData)
+
+# Intestine
+geneExpressionData <- getGeneData("GSE40292.txt.gz")
+geneExpressionData <- na.omit(geneExpressionData)
+genderData <- getGenderData("Class/GSE40292__gender.txt")
+intMergedData <- inner_join(genderData, geneExpressionData)
+
+# Desmoid tumors
+geneExpressionData <- getGeneData("GSE58697.txt.gz")
+genderData <- getGenderData("Class/GSE58697__gender.txt")
+desMergedData <- inner_join(genderData, geneExpressionData)
+```
+
+
+## Get p-values 
+```{r}
+getPValue <- function(data) {
+  nGenes <- ncol(data) - 2
+  geneMatrix <- as.matrix(data[,3:nGenes + 2], ncol=nGenes)
+
+  p <- rep(NA,nGenes)
+
+  x <- data$Class
+
+  for (i in 1:ncol(geneMatrix)) {
+      y <- geneMatrix[,i] 
+      mod <- lm(y~x)
+      p[i] <- anova(mod)[1,5]
+  }
+
+  return(p)
+}
+
+
+```
+
+
+## Assign PValues to Genes
+```{r}
+assignPValues <- function(data) {
+  geneNames <- colnames(data)[3:(ncol(data))] 
+  
+  pv <- getPValue(data)
+  pValueData <- data.frame(Gene=geneNames, pv)  # class
+  pValueData$Gene <- as.character(pValueData$Gene)
+
+  pValueDF <- inner_join(metaData, pValueData)
+  pValueDF <- arrange(pValueDF, pv)
+  colnames(pValueDF)[4] <- "PValue"
+  return(pValueDF)
+}
+```
+
+
+## get pvalue dfs
+```{r}
+coloPVData <- assignPValues(coloMergedData)
+epePVData <- assignPValues(epeMergedData)
+smokePVData <- assignPValues(smokeMergedData)
+lungPVData <- assignPValues(lungMergedData)
+colPVData <- assignPValues(colMergedData)
+fibPVData <- assignPValues(fibMergedData)
+intPVData <- assignPValues(intMergedData)
+desPVData <- assignPValues(desMergedData)
+
+```
+
+
+## Decision Tree function to get correct prediction rate
+```{r}
+getRate <- function(pvData, tData) {
+  samp <- sample(pvData$Gene, 4000)
+  dataSamp <- tData[,c("Class", samp)] 
+  dataSamp$Class <- as.factor(as.character(dataSamp$Class))
+
+  fitGE <- randomForest(dataSamp$Class ~ ., importance=TRUE, ntree=1000, data=dataSamp)
+  predType <- predict(fitGE)
+  t <- table(predType, dataSamp$Class)
+  correctRate <- (t[1,1]+t[2,2])/sum(t)
+  return(correctRate)
+}
+
+```
+
+
+## Use getRate Function
+```{r}
+getRate(coloPVData, coloMergedData)
+# 0.7642857
+getRate(epePVData, epeMergedData)
+# 0.74
+getRate(smokePVData, smokeMergedData)
+# 0.9385965
+getRate(lungPVData, lungMergedData)
+# 0.9679144
+getRate(colPVData, colMergedData)
+# 0.8285714
+getRate(fibPVData, fibMergedData)
+# 0.7565217
+getRate(intPVData, intMergedData)
+# 0.9825581
+getRate(desPVData, desMergedData)
+# 0.7704918
+
+# rateVector <- sapply(1:10, function(x) getRate(pValueDF1, coloMergedData))
+# var(rateVector)
+
+nrow(lungPVData)/2
+lungSamp1 <- lungPVData$Gene[1:8889]
+lungSamp2 <- lungPVData$Gene[8890:17778]
+dataSamp1 <- lungMergedData[,c("Class", lungSamp1)] 
+dataSamp1$Class <- as.factor(as.character(dataSamp1$Class))
+fitGE1 <- randomForest(dataSamp1$Class ~ ., importance=TRUE, ntree=1000, data=dataSamp1)
+varImpPlot(fitGE1)
+# Top 4 cut off
+
+# ENSG00000012817, ENSG00000129824, ENSG00000270641, ENSG00000005889
+# ENSG00000270641, ENSG00000067646, ENSG00000099725, ENSG00000176728
+# ENSG00000131002, ENSG00000129824, ENSG00000067646, ENSG00000169249
+# ENSG00000131002, ENSG00000233864, ENSG00000012817, ENSG00000114374, ENSG0000067048, ENSG00000165246, ENSG00000229807, ENSG00000129824, ENSG00000183878
+# ENSG00000229807, ENSG00000067646, ENSG00000129824, ENSG00000165246, ENSG0000270641, ENSG00000012817, ENSG00000114374, ENSG00000131002, ENSG00000099725
+
+
+
+```
+
+
+
+## OSCC
+```{r}
+geneExpressionData <- getGeneData("GSE30784.txt.gz")
+geneExpressionData <- na.omit(geneExpressionData)
+genderData <- getGenderData("Class/GSE30784__gender.txt")
+osccMergedData <- inner_join(genderData, geneExpressionData)
+# osccAgeData <- read_tsv("Class/GSE30784__age.txt")
+# ageData$Age <- factor(osccAgeData$Age)
+# 
+# osccMergedData <- inner_join(osccAgeData, osccMergedData)
+
+# nGenes <- ncol(osccMergedData) - 3
+# geneMatrix <- as.matrix(osccMergedData[,3:nGenes + 3], ncol=nGenes)
+# 
+# p <- rep(NA,nGenes)
+# 
+# x1 <- osccMergedData$Class
+# x2 <- osccMergedData$age.40.49
+# 
+# for (i in 1:ncol(geneMatrix)) {
+#      y <- geneMatrix[,i] 
+#     mod <- lm(y~x)
+#     p[i] <- anova(mod)[1,5]
+# }
+
+osccPVData <- assignPValues(osccMergedData)
+getRate(osccPVData, osccMergedData)
+# 0.7468354
+```
+
+
+
+
+

@@ -1,0 +1,222 @@
+---
+title: "Master Code"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Load libraries & set working directory
+
+```{r, echo=TRUE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(limma)
+
+setwd("~/Dropbox/Gene_Signatures_Code")
+```
+
+## Read in data from directory & merge data files
+```{r, echo=TRUE}
+getGeneData <- function(data) {
+  geneExpressionData <- read_tsv(data)
+  colnames(geneExpressionData)[1] <- "SampleID"
+  return(geneExpressionData)
+}
+
+metaData <- read_csv("Metadata/Ensembl87_Biomart_GRCh38.p7.csv")
+colnames(metaData)[1] <- "Gene"
+colnames(metaData)[2] <- "Chromosome"
+colnames(metaData)[3] <- "GeneSymbol"
+
+# Remove unnecessary column
+metaData <- select(metaData, -4)
+
+metaData <- filter(metaData, metaData$Chromosome %in% c(1:22, "X", "Y"), !is.na(metaData$GeneSymbol))
+filteredMetaData <- filter(metaData, metaData$Chromosome %in% c(1:22))
+
+metaData$Chromosome <- factor((metaData$Chromosome))
+# Use filtered for barplot, regular for the dataframe
+filteredMetaData$Chromosome <- factor(as.numeric(filteredMetaData$Chromosome)) 
+
+```
+
+## Merge Class column
+```{r}
+getGenderData <- function(data) {
+  genderData <- data.frame(read_tsv(data))
+  genderData$Class <- factor(genderData[,2])
+
+  genderData$Class <- ifelse(genderData$Class=="0", genderData$Class <- "Male", genderData$Class <- "Female")
+
+  genderData <- genderData[,c(1,3)]
+  return(genderData)
+}
+```
+
+
+## Create dot plot and t.test function
+
+```{r, echo=TRUE}
+dotPlot <- function(mergedData, geneOfInterest, outFilePath) {
+  plotData <- select(mergedData, SampleID, Class, one_of(geneOfInterest)) #Come back to this
+  colnames(plotData)[3] <- "Gene"
+  plotData$Gene <- as.numeric(plotData$Gene)
+
+  pValue <- t.test(Gene ~ Class, data = plotData)$p.value
+  
+  if(!is.null(outFilePath)) { 
+    p <- ggplot(plotData, aes(x = Class, y = Gene)) + geom_jitter(size=.5, width=.15) +
+     theme_minimal() +
+     theme(axis.ticks.y = element_blank(), 
+       axis.line = element_blank(),
+       axis.line.y = element_line(color="gray50", size=0.2),
+       panel.grid.major = element_line(color = "gray50", size = 0.2), 
+       panel.grid.major.x = element_blank()) +
+     ggtitle(paste(titlePrefix, geneOfInterest, paste("(", (format(pValue, trim = TRUE, digits = 2, scientific = TRUE)), ")", sep=""), sep=" ")) + 
+     theme(plot.title = element_text(hjust = 0.5), x.axis.title = element_text(font = )) +
+     scale_y_continuous(name = "Expression Level", seq(-6, 6, by = 0.05))
+  
+    print(p)
+
+    ggsave(outFilePath, height=6, width=8, units="in")
+  }
+  
+  return(pValue)
+}
+```
+
+## Just the t.test
+
+```{r}
+getPValues <- function(mergedData) {
+  nGenes <- ncol(mergedData) - 2
+  geneMatrix <- as.matrix(mergedData[,3:(nGenes+2)], ncol=nGenes)
+  p <- rep(NA,nGenes)
+  for (i in 1:ncol(geneMatrix)) {
+    y <- geneMatrix[,i]
+    p[i] <- t.test(y ~ mergedData$Class)$p.value
+  }
+ return(p)
+}
+```
+
+## Create a function to perform t.test (by calling the dotplot function) and get p-values
+
+```{r, }
+getSignificantGenes <- function(mergedData, outFilePath) {
+  pValueVector <- NULL 
+
+  for(i in 3:ncol(mergedData)) { 
+    geneOfInterest <- colnames(mergedData)[i] 
+    pValue <- dotPlot(mergedData, geneOfInterest, paste("Asymptomatic"), NULL) 
+    
+    pValueVector <- c(pValueVector, pValue)
+  }
+  
+  geneName <- colnames(mergedData)[3:ncol(mergedData)]
+
+  pValueDataFrame <- data.frame(Gene=geneName, PValue=pValueVector)
+  pValueDataFrame <- arrange(pValueDataFrame, PValue)
+
+  if(!is.null(outFilePath)) {
+    histogram <- ggplot(pValueDataFrame, aes_(x=pValueVector)) + geom_histogram(binwidth = .05, center=.025) + ggtitle("Significant Genes") 
+    print(histogram)
+  
+    ggsave(outFilePath, device= "pdf", height=6, width=8, units="in") 
+  }
+  
+  return(pValueDataFrame) 
+}
+# Come back and figure this out so you can get a dotplot if you want but you don't need one right now.
+# dotPlot(genderMergedData, genderMergedData$ENSG00000102921, paste("Figures/", "ENSG00000102921", "_DotPlot.pdf", sep = "")) 
+```
+
+## Create a function to perform t.test (by calling the getPValues function) and get p-values
+
+```{r, }
+getSignificantGenes <- function(mergedData) {
+    pValue <- getPValues(mergedData) 
+    geneNames <- colnames(mergedData)[3:(ncol(mergedData))] 
+    o <- order(pValue)
+    pValueData <- data.frame(Gene=geneNames[o],pValue=pValue[o])
+    return(pValueData)
+}
+```
+
+## Call Significant Genes function to get the most significant
+
+```{r}
+printGenes <- function(titlePrefix, mergedData, metaDataFrame) {
+
+  pValueDataFrame <- getSignificantGenes(mergedData)
+  pValueDataFrame$Gene <- as.character(pValueDataFrame$Gene)
+  pValueDataFrame <- inner_join(metaDataFrame, pValueDataFrame)
+  pValueDataFrame <- arrange(pValueDataFrame, pValue)
+
+  return(pValueDataFrame) 
+}
+```
+
+
+## create a function that calls print genes function and gets the proportion of significant genes for each chromosome
+```{r}
+createNewDF <- function(titlePrefix=NULL, mergedData, metaDataFrame) {
+  
+  genderData <- printGenes(titlePrefix, mergedData, metaDataFrame)
+
+  newDataFrame <- subset(genderData, select=c("Chromosome", "Gene", "pValue"))
+
+  for(i in 1:nrow(newDataFrame)) {
+    ifelse(newDataFrame$pValue[i]<=.05, newDataFrame$pValue[i] <- "Yes", newDataFrame$pValue[i] <- "No")
+  }
+
+  df <- data.frame(newDataFrame)
+  return(df)
+  return(print(hist(genderData$pValue)))
+}
+```
+
+# If you want to make a barplot, use this function instead of the createNewDF function
+```{r}
+createBarPlot <- function(titlePrefix, mergedData, metaDataFrame) {
+  genderData <- printGenes(titlePrefix, mergedData, metaDataFrame)
+  
+  newDataFrame <- subset(genderData, select=c("Chromosome", "Gene", "pValue"))
+
+  for(i in 1:nrow(newDataFrame)) {
+    ifelse(newDataFrame$pValue[i]<=.05, newDataFrame$pValue[i] <- "Yes", newDataFrame$pValue[i] <- "No")
+  }
+
+  df <- data.frame(newDataFrame)
+  
+  group_by(df, Chromosome, pValue)
+  summarise(df, count = n())
+
+  propPlot <- ggplot(df, aes(x=Chromosome, fill=pValue)) + geom_bar() + ggtitle(paste(titlePrefix, "Significant Genes", by=" "))
+  return(propPlot)
+}
+
+```
+
+# After Gastric dataset. Talk to Dr. Piccolo, one of his grad students or someone who can tell us if it's paper-worthy.
+# Continue on to all data sets, any patterns? See anything?
+# If not, is there a different question we can ask?
+# Look at other papers about gender genetic differences
+
+
+
+## Look up prevalance of the disease in females
+## Check which genes are significant. Are the same ones appearing?
+## Look if they have other classifications to do ^^^
+## Send the list of diseases to Dr. Tass.
+## Is the lung file in the wrong format? It's not reading in any data
+## Make a summary that has the most significnace
+## Make a table of the actual genes that are significant
+
+## Colorectal and Colon cancers are related
+## Work on Presentation!!!
+## Machine Learning. If I look at the gene signature can I predict what disease they have--especially helpful if they're asymptomatic. Early detection.
+## Ask Dr. Piccolo what Haley was doing.
+## First: SUMMARIZE. Did we answer any questions? What questions do we still have that we can concretely answer?
+

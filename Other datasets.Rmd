@@ -1,0 +1,181 @@
+---
+title: "Using the Master Code"
+output: html_document
+---
+
+## Colorectal Cancer
+```{r}
+geneExpressionData <- getGeneData("GSE26682_U133A.txt.gz")
+genderData <- getGenderData("Class/U133A__gender.txt")
+coloMergedData <- inner_join(genderData, geneExpressionData)
+
+colorectalNewDF <- createNewDF(NULL, coloMergedData, metaData)
+createBarPlot(paste("Colorectal", "Cancer", by=" "), coloMergedData, filteredMetaData)
+```
+
+## Posterior Fossa Ependymoma
+```{r}
+geneExpressionData <- getGeneData("GSE27279.txt.gz")
+genderData <- getGenderData("Class/GSE27279__gender.txt")
+epeMergedData <- inner_join(genderData, geneExpressionData)
+
+epeNewDF <- createNewDF(epeMergedData, metaData)
+# Use filtered because X and Y are not numeric
+createBarPlot("Ependymoma", epeMergedData, filteredMetaData)
+
+```
+
+## Lung Cancer (Not working?)
+```{r}
+geneExpressionData <- getGeneData("GSE2109_Lung.txt.gz")
+genderData <- getGenderData("Class/Lung__Gender.txt")
+lungMergedData <- inner_join(genderData, geneExpressionData)
+
+lungNewDF <- createNewDF(paste("Lung", "Cancer", by=" "), lungMergedData, metaData)
+```
+
+## Smokers
+```{r}
+geneExpressionData <- getGeneData("GSE37147.txt.gz")
+genderData <- getGenderData("Class/GSE37147__gender.txt")
+smokeMergedData <- inner_join(genderData, geneExpressionData)
+
+smokeNewDF <- createNewDF("Smoker", smokeMergedData, metaData)
+createBarPlot("Smoker", smokeMergedData, filteredMetaData)
+
+```
+
+## Lung Cancer (Not working?)
+```{r}
+geneExpressionData <- getGeneData("GSE30219.txt.gz")
+genderData <- getGenderData("Class/GSE30219__gender.txt")
+lungMergedData <- inner_join(genderData, geneExpressionData)
+
+lungNewDF <- createNewDF("Lung", lungMergedData, metaData)
+```
+
+## Oral Squamous Cell Carcinoma (OSCC)
+```{r}
+geneExpressionData <- getGeneData("GSE30784.txt.gz")
+genderData <- getGenderData("Class/GSE30784__gender.txt")
+osccMergedData <- inner_join(genderData, geneExpressionData)
+# osccAgeData <- read_tsv("Class/GSE30784__age.txt")
+# ageData$Age <- factor(osccAgeData$Age)
+# 
+# osccMergedData <- inner_join(osccAgeData, osccMergedData)
+# createBarPlot("OSCC", osccMergedData[,-c(1:3)], filteredMetaData)
+
+osccNewDF <- createNewDF("OSCC", osccMergedData, metaData)
+createBarPlot("OSCC", osccMergedData, filteredMetaData)
+
+## Check this histogram bc a lot are significant
+osccGenderGenes <- printGenes("OSCC", osccMergedData, metaData)
+hist(osccGenderGenes$pValue)
+
+osccSigGenes <- osccNewDF[which(osccNewDF$pValue=="Yes"),]
+```
+# I want to compare females with oscc to females with other things
+
+## Lung Cancer
+```{r}
+geneExpressionData <- getGeneData("GSE37745.txt.gz")
+genderData <- getGenderData("Class/GSE37745__gender.txt")
+lungMergedData <- inner_join(genderData, geneExpressionData)
+
+lungNewDF <- createNewDF("Lung", lungMergedData, metaData)
+createBarPlot("Lung", lungMergedData, filteredMetaData)
+# This is also 20-30% significant
+
+## Check this histogram bc a lot are significant
+lungGenderGenes <- printGenes("Lung", lungMergedData, metaData)
+hist(lungGenderGenes$pValue)
+
+lungSigGenes <- lungNewDF[which(lungNewDF$pValue=="Yes"),]
+```
+
+
+## Stage II and III Colon Cancer
+```{r}
+geneExpressionData <- getGeneData("GSE37892.txt.gz")
+genderData <- getGenderData("Class/GSE37892__gender.txt")
+colMergedData <- inner_join(genderData, geneExpressionData)
+
+colNewDF <- createNewDF("Colon", colMergedData, metaData)
+createBarPlot("Colon", colMergedData, filteredMetaData)
+# About 10% significant
+
+# colGenderGenes <- printGenes("Colon", colMergedData, metaData)
+# hist(colGenderGenes$pValue)
+```
+
+## Idiopathic Pulmonary Fibrosis
+```{r}
+geneExpressionData <- getGeneData("GSE38958.txt.gz")
+genderData <- getGenderData("Class/GSE38958__gender.txt")
+fibMergedData <- inner_join(genderData, geneExpressionData)
+
+fibNewDF <- createNewDF("Fibrosis", fibMergedData, metaData)
+createBarPlot("Fibrosis", fibMergedData, filteredMetaData)
+
+## Check this histogram bc a lot are significant
+fibGenderGenes <- printGenes("Fibrosis", fibMergedData, metaData)
+hist(fibGenderGenes$pValue)
+
+fibSigGenes <- fibNewDF[which(fibNewDF$pValue=="Yes"),]
+
+```
+
+## Colon Cancer (Not working)
+```{r}
+geneExpressionData <- getGeneData("GSE39582.txt.gz")
+genderData <- getGenderData("Class/GSE39582__gender.txt")
+col2MergedData <- inner_join(genderData, geneExpressionData)
+
+col2NewDF <- createNewDF("Colon", col2MergedData, metaData)
+createBarPlot("Colon", col2MergedData, filteredMetaData)
+
+```
+
+## Intestine
+```{r}
+ 
+intNewDF <- createNewDF("Intestine", intMergedData, metaData)
+createBarPlot("Intestine", intMergedData, filteredMetaData)
+```
+
+## Desmoid Tumors
+```{r}
+geneExpressionData <- getGeneData("GSE58697.txt.gz")
+genderData <- getGenderData("Class/GSE58697__gender.txt")
+desMergedData <- inner_join(genderData, geneExpressionData)
+
+desNewDF <- createNewDF("Desmoid", desMergedData, metaData)
+createBarPlot("Desmoid", desMergedData, filteredMetaData)
+
+desGenderGenes <- printGenes("Desmoid", desMergedData, metaData)
+hist(desGenderGenes$pValue)
+```
+
+## ATTR (Symptomatic)
+```{r}
+geneExpressionData <- getGeneData("GSE67784.txt.gz")
+genderData <- getGenderData("Class/GSE67784__gender.txt")
+attrMergedData <- inner_join(genderData, geneExpressionData)
+
+attrNewDF <- createNewDF("ATTR", attrMergedData, metaData)
+createBarPlot("ATTR", attrMergedData, filteredMetaData)
+
+attrGenderGenes <- printGenes("ATTR", attrMergedData, metaData)
+hist(attrGenderGenes$pValue)
+
+attrSigGenes <- attrNewDF[which(attrNewDF$pValue=="Yes"),]
+
+```
+
+
+## Comparing significant genes for oscc and lung cancer
+```{r}
+allSigGenes <- inner_join(lungSigGenes,osccSigGenes)
+allSigGenes <- inner_join(allSigGenes, fibSigGenes)
+allSigGenes <- inner_join(allSigGenes, attrSigGenes)
+```

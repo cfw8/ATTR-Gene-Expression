@@ -77,7 +77,7 @@ fullData <- inner_join(ageData, combData)
 
 
 
-## Get p-values
+## Get p-values for ANOVA
 ```{r}
 nGenes <- ncol(fullData) - 4
 geneMatrix <- as.matrix(fullData[,5:nGenes + 4], ncol=nGenes)
@@ -109,7 +109,7 @@ results <- list(p1,p2,p3,p4,p5,p6)
 ```
 
 
-## Get Significant Genes
+## Assign PValues to Genes
 ```{r, }
 geneNames <- colnames(fullData)[5:(ncol(fullData))] 
   
@@ -188,8 +188,8 @@ getRate1 <- function() {
 
   predType <- predict(fitGE)
   t1 <- table(predType, fullDataSub$Type)
-  correct.rate1 <- (t1[1,1]+t1[2,2]+t1[3,3])/sum(t1)
-  return(correct.rate1)
+  correctRate1 <- (t1[1,1]+t1[2,2]+t1[3,3])/sum(t1)
+  return(correctRate1)
 }
 
 rateVector1 <- sapply(1:10, function(x) getRate1())
@@ -209,8 +209,8 @@ getRate2 <- function() {
   fitGE2 <- randomForest(fullDataSample$Type ~ ., importance=TRUE, ntree=10000, data=fullDataSample)
   predType2 <- predict(fitGE2)
   t2 <- table(predType2, fullDataSample$Type)
-  correct.rate2 <- (t2[1,1]+t2[2,2]+t2[3,3])/sum(t2)
-  return(correct.rate2)
+  correctRate2 <- (t2[1,1]+t2[2,2]+t2[3,3])/sum(t2)
+  return(correctRate2)
 }
 
 rateVector2 <- sapply(1:10, function(x) getRate2())
@@ -229,8 +229,8 @@ getRate3 <- function() {
   fitGE3 <- randomForest(fullDataSample1$Type ~ ., importance=TRUE, ntree=10000, data=fullDataSample1)
   predType3 <- predict(fitGE3)
   t3 <- table(predType3, fullDataSample1$Type)
-  correct.rate3 <- (t3[1,1]+t3[2,2]+t3[3,3])/sum(t3)
-  return(correct.rate3)
+  correctRate3 <- (t3[1,1]+t3[2,2]+t3[3,3])/sum(t3)
+  return(correctRate3)
 }
 
 rateVector3 <- sapply(1:10, function(x) getRate3())
@@ -249,8 +249,8 @@ getRate <- function() {
   fitGE <- randomForest(fullDataSamp$Type ~ ., importance=TRUE, ntree=500, data=fullDataSamp)
   predType <- predict(fitGE)
   t <- table(predType, fullDataSamp$Type)
-  correct.rate <- (t[1,1]+t[2,2]+t[3,3])/sum(t)
-  return(correct.rate)
+  correctRate <- (t[1,1]+t[2,2]+t[3,3])/sum(t)
+  return(correctRate)
 }
 
 rateVector <- sapply(1:10, function(x) getRate())
@@ -258,6 +258,24 @@ var(rateVector)
 ```
 
 
+
+## Only predicting between control and asymptomatic
+```{r}
+getRate <- function() {
+  samp <- sample(pValueDF1$Gene, 500)
+  combDatasbst <- rbind(asymptomaticData, controlsData)
+  fullDatasbst <- inner_join(ageData, combDatasbst)
+  fullDataSamp <- fullDatasbst[,c("age", "Class", "Type", samp)] 
+  fullDataSamp$Type <- as.factor(as.character(fullDataSamp$Type))
+
+  fitGE <- randomForest(fullDataSamp$Type ~ ., importance=TRUE, ntree=500, data=fullDataSamp)
+  predType <- predict(fitGE)
+  t <- table(predType, fullDataSamp$Type)
+  correctRate <- (t[1,1]+t[2,2])/sum(t)
+  return(correctRate)
+}
+getRate()
+```
 
 
 
