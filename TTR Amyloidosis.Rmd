@@ -1,0 +1,233 @@
+---
+title: "Amyloidosis Gene Expression"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+First Step:
+Practice this with gender
+Logistic Regression:
+  1 for diseased, 0 for control
+  1 for male, 0 for female
+  How can I include age?
+Can we predict gender? The disease status? Age?
+Does gender help improve the predictions??
+Treat gender as response or a covariate
+  What's on the x axis/y axis?
+
+Read Chapter 7, review chapter 3
+  Random Forest, support vector machines
+Should we bootstrap??
+
+## Load libraries & set working directory
+
+```{r, echo=TRUE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+# library(affy) # Probably don't need to use this, for raw data
+# mlr package
+
+setwd("~/Dropbox/Gene_Signatures_Code")
+```
+
+## Read in data from directory & merge data files
+
+```{r, echo=TRUE}
+geneExpressionData <- read_tsv("GSE67784.txt.gz")
+colnames(geneExpressionData)[1] <- "SampleID"
+
+metaData <- read_csv("Metadata/Ensembl87_Biomart_GRCh38.p7.csv")
+colnames(metaData)[1] <- "Gene"
+colnames(metaData)[2] <- "Chromosome"
+colnames(metaData)[3] <- "GeneSymbol"
+
+# Remove unnecessary column
+metaData <- select(metaData, -4)
+
+metaData <- filter(metaData, metaData$Chromosome %in% c(1:22, "X", "Y"), !is.na(metaData$GeneSymbol))
+# filteredMetaData <- filter(metaData, metaData$Chromosome %in% c(1:22))
+
+metaData$Chromosome <- factor(metaData$Chromosome)
+# filteredMetaData$Chromosome <- factor(filteredMetaData$Chromosome)
+```
+
+## Write a function to create separate datasets
+
+```{r,}
+getClassData <- function(geneExpressionData, classFile) {
+  classData <- read_tsv(classFile)
+  classData$Class <- factor(classData$Class)
+
+  mergedData <- inner_join(classData, geneExpressionData)
+
+  return(mergedData)
+}
+```
+
+## Create separate datasets
+
+```{r}
+asymptomaticMergedData <- getClassData(geneExpressionData, "Class/Asymptomatic__gender.txt")
+symptomaticMergedData <- getClassData(geneExpressionData, "Class/Symptomatic__gender.txt")
+treatedMergedData <- getClassData(geneExpressionData, "Class/Treated__gender.txt")
+onlycontrolsMergedData <- getClassData(geneExpressionData, "Class/Only_Controls__gender.txt")
+```
+
+## Create t.test function
+
+```{r, echo=TRUE}
+getPValues <- function(mergedData) {
+  nGenes <- ncol(mergedData) - 2
+  geneMatrix <- as.matrix(mergedData[,3:(nGenes+2)], ncol=nGenes)
+  p <- rep(NA,nGenes)
+  for (i in 1:ncol(geneMatrix)) {
+    y <- geneMatrix[,i]
+    p[i] <- t.test(y ~ mergedData$Class)$p.value
+  }
+ return(p)
+}
+```
+
+## Create a function to perform t.test (by calling the getPValues function) and get p-values
+
+```{r, }
+getSignificantGenes <- function(mergedData) {
+    pValue <- getPValues(mergedData) 
+    geneNames <- colnames(mergedData)[3:(ncol(mergedData))] 
+    o <- order(pValue)
+    pValueData <- data.frame(Gene=geneNames[o],pValue=pValue[o])
+    return(pValueData)
+}
+
+```
+
+
+## Call Significant Genes function to get the most significant
+
+```{r}
+printGenes <- function(titlePrefix, mergedData, metaDataFrame) {
+
+  title <- paste(titlePrefix, "_Results_topTen", sep = "")
+
+  pValueDataFrame <- getSignificantGenes(mergedData)
+  pValueDataFrame$Gene <- as.character(pValueDataFrame$Gene)
+  pValueDataFrame <- inner_join(metaDataFrame, pValueDataFrame)
+  pValueDataFrame <- arrange(pValueDataFrame, pValue)
+  return(pValueDataFrame) 
+}
+```
+
+
+```{r}
+asymptomaticGenes <- printGenes("Asymptomatic", asymptomaticMergedData, metaData) 
+symptomaticGenes <- printGenes("Symptomatic", symptomaticMergedData, metaData)
+treatedGenes <- printGenes("Treated", treatedMergedData, metaData)
+onlycontrolsGenes <- printGenes("Only_Controls", onlycontrolsMergedData, metaData)
+
+```
+
+## create a function that gets the proportion of significant genes for each chromosome
+```{r}
+createNewDF <- function(genesData) {
+  newDataFrame <- subset(genesData, select=c("Chromosome", "Gene", "pValue"))
+
+  for(i in 1:nrow(newDataFrame)) {
+    ifelse(newDataFrame$pValue[i]<=.05, newDataFrame$pValue[i] <- "Yes", newDataFrame$pValue[i] <- "No")
+  }
+
+  df <- data.frame(newDataFrame)
+  return(df)
+}
+```
+
+
+```{r}
+createBarPlot <- function(genesDF, prefix) {
+ 
+  group_by(genesDF, Chromosome, pValue)
+  summarise(genesDF, count = n())
+
+   propPlot <- ggplot(genesDF, aes(x=Chromosome, fill=pValue)) + geom_bar() + ggtitle(paste(prefix, "Significant Genes", by=" "))
+   return(propPlot)
+  
+  return(genesDF)
+}
+
+```
+
+
+```{r}
+asymptomaticNewDF <- createNewDF(asymptomaticGenes)
+symptomaticNewDF <- createNewDF(symptomaticGenes)
+treatedNewDF <- createNewDF(treatedGenes)
+onlycontrolsNewDF <- createNewDF(onlycontrolsGenes)
+```
+
+
+
+```{r}
+createBarPlot(asymptomaticNewDF, "Asymptomatic")
+createBarPlot(symptomaticNewDF, "Symptomatic")
+createBarPlot(treatedNewDF, "Treated")
+createBarPlot(onlycontrolsNewDF, "Controls")
+```
+
+
+```{r}
+# Find the genes which are significant between all amyloidosis patients
+impGenes <- inner_join(asymptomaticNewDF, symptomaticNewDF)
+impGenes2 <- inner_join(impGenes, treatedNewDF)
+
+# Frequency of significant genes between all amyloidosis patients
+freqImpGenes <- impGenes2 %>% 
+  count(Chromosome, pValue) %>%
+  group_by(Chromosome) %>%
+  mutate(freq = n / sum(n))
+
+impGenes3 <- impGenes2[which(impGenes2$pValue=="Yes"),]
+
+# Find significantly different genes for those without amyloidosis 
+ocImpGenes <- onlycontrolsNewDF[which(onlycontrolsNewDF$pValue=="Yes"),]
+
+# Significantly different genes for males and females with and without
+impGenes4 <- inner_join(impGenes2, onlycontrolsNewDF)
+allImpGenes <- impGenes4[which(impGenes4$pValue=="Yes"),]
+
+# Compare these as we continue to the other datasets
+nrow(impGenes3)
+nrow(ocImpGenes)
+nrow(allImpGenes)
+```
+
+
+```{r}
+#plot histogram of p-values
+hist(asymptomaticGenes$pValue, main=paste("Asymptomatic", "P-Values"), xlab = "P-Values")
+hist(symptomaticGenes$pValue, main=paste("Symptomatic", "P-Values"), xlab = "P-Values")
+hist(treatedGenes$pValue, main=paste("Treated", "P-Values"), xlab = "P-Values")
+hist(onlycontrolsGenes$pValue, main=paste("Controls", "P-Values"), xlab = "P-Values")
+```
+
+# After Gastric dataset. Talk to Dr. Piccolo, one of his grad students or someone who can tell us if it's paper-worthy.
+# Continue on to all data sets, any patterns? See anything?
+# If not, is there a different question we can ask?
+# Look at other papers about gender genetic differences
+
+
+```{r}
+tmp <- inner_join(impGenes3, genderNewDF[which(genderNewDF$pValue=="Yes"),])
+```
+
+
+## Try Later 
+```{r}
+geneExpressionData <- getGeneData("GSE37147.txt.gz")
+genderData <- getGenderData("Class/GSE37147__gender.txt")
+smokeMergedData <- inner_join(genderData, geneExpressionData)
+
+smokeNewDF <- createNewDF("Smoker", smokeMergedData, metaData)
+createBarPlot("Smoker", smokeMergedData, filteredMetaData)
+
+```
+
