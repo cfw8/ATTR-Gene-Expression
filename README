@@ -1,1 +1,6 @@
-These are R files from my research.
+These are R markdown files from my research.
+TTR Amyloidosis uses a t-test to compare male and female normalized gene expression levels for patients with Tranthyretin Amyloidosis.
+Other Datasets is a file that runs the same analysis for various other genetic diseases.
+Master Code is a file with all the generalized code to do the analysis whether on existing datasets I have done or new ones.
+ATTR Random Forest Approach uses Random Forests to see of gene expression can accurately predict gender. We have found that it cannot.
+Cancer Datasets RF Approach also does a RF for several of the other diseases and we are focusing right now on Lung Cancer because Gene Expression is doing a good job of predicting gender.
