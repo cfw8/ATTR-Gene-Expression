@@ -1,4 +1,4 @@
-These are R markdown files from my research.
+These are R markdown files from my research analyzing difference in gene expression between males and females with genetic diseases.
 TTR Amyloidosis uses a t-test to compare male and female normalized gene expression levels for patients with Tranthyretin Amyloidosis.
 Other Datasets is a file that runs the same analysis for various other genetic diseases.
 Master Code is a file with all the generalized code to do the analysis whether on existing datasets I have done or new ones.
