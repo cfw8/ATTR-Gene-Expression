@@ -4,20 +4,7 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
-First Step:
-Practice this with gender
-Logistic Regression:
-  1 for diseased, 0 for control
-  1 for male, 0 for female
-  How can I include age?
-Can we predict gender? The disease status? Age?
-Does gender help improve the predictions??
-Treat gender as response or a covariate
-  What's on the x axis/y axis?
 
-Read Chapter 7, review chapter 3
-  Random Forest, support vector machines
-Should we bootstrap??
 
 ## Load libraries & set working directory
 
