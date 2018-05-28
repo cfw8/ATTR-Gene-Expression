@@ -5,8 +5,10 @@ output: html_document
 
 ## Load Libraries and set working directory
 ```{r, echo=TRUE}
+library(readr)
+library(dplyr)
+library(ggplot2)
 library(randomForest) 
-library(caret)
 setwd("~/Dropbox/Gene_Signatures_Code")
 ```
 
@@ -116,7 +118,6 @@ getPValue <- function(data) {
   return(p)
 }
 
-
 ```
 
 
@@ -129,7 +130,7 @@ assignPValues <- function(data) {
   pValueData <- data.frame(Gene=geneNames, pv)  # class
   pValueData$Gene <- as.character(pValueData$Gene)
 
-  pValueDF <- inner_join(metaData, pValueData)
+  pValueDF <- inner_join(filteredMetaData, pValueData)
   pValueDF <- arrange(pValueDF, pv)
   colnames(pValueDF)[4] <- "PValue"
   return(pValueDF)
@@ -159,8 +160,8 @@ getRate <- function(pvData, tData) {
   dataSamp$Class <- as.factor(as.character(dataSamp$Class))
 
   fitGE <- randomForest(dataSamp$Class ~ ., importance=TRUE, ntree=1000, data=dataSamp)
-  predType <- predict(fitGE)
-  t <- table(predType, dataSamp$Class)
+  predClass <- predict(fitGE)
+  t <- table(predClass, dataSamp$Class)
   correctRate <- (t[1,1]+t[2,2])/sum(t)
   return(correctRate)
 }
@@ -189,22 +190,92 @@ getRate(desPVData, desMergedData)
 
 # rateVector <- sapply(1:10, function(x) getRate(pValueDF1, coloMergedData))
 # var(rateVector)
+```
 
-nrow(lungPVData)/2
-lungSamp1 <- lungPVData$Gene[1:8889]
-lungSamp2 <- lungPVData$Gene[8890:17778]
-dataSamp1 <- lungMergedData[,c("Class", lungSamp1)] 
-dataSamp1$Class <- as.factor(as.character(dataSamp1$Class))
-fitGE1 <- randomForest(dataSamp1$Class ~ ., importance=TRUE, ntree=1000, data=dataSamp1)
-varImpPlot(fitGE1)
-# Top 4 cut off
+#####
+DO THIS NEXT PART START TO FINISH 5 TIMES
+#####
 
-# ENSG00000012817, ENSG00000129824, ENSG00000270641, ENSG00000005889
-# ENSG00000270641, ENSG00000067646, ENSG00000099725, ENSG00000176728
-# ENSG00000131002, ENSG00000129824, ENSG00000067646, ENSG00000169249
-# ENSG00000131002, ENSG00000233864, ENSG00000012817, ENSG00000114374, ENSG0000067048, ENSG00000165246, ENSG00000229807, ENSG00000129824, ENSG00000183878
-# ENSG00000229807, ENSG00000067646, ENSG00000129824, ENSG00000165246, ENSG0000270641, ENSG00000012817, ENSG00000114374, ENSG00000131002, ENSG00000099725
+## Splitting the data into training and test data
+```{r}
+splitdf <- function(data) {
+    index <- 1:nrow(data)
+    trainindex <- sample(index, trunc(length(index)/2))
+    trainset <- data[trainindex, ]
+    testset <- data[-trainindex, ]
+    res <- list(trainset=trainset,testset=testset)
+    return(res)
+}
+```
 
+
+
+
+
+## RF Using Training and Testing Data
+```{r}
+getRF <- function(PVData, mergedData) {
+  
+  ## Create training and test data
+  trainandtestData <- splitdf(mergedData)
+  trainData <- trainandtestData[[1]]
+  testData <- trainandtestData[[2]]
+  
+  ## Find the important genes using training data
+  samp1 <- PVData$Gene[1:trunc(nrow(PVData)/2)]
+  dataSamp1 <- trainData[,c("Class", samp1)] 
+  dataSamp1$Class <- as.factor(as.character(dataSamp1$Class))
+  fitGE1 <- randomForest(dataSamp1$Class ~ ., importance=TRUE, ntree=1000, data=dataSamp1)
+  
+  samp2 <- PVData$Gene[trunc(nrow(PVData)/2):nrow(PVData)]
+  dataSamp2 <- trainData[,c("Class", samp2)] 
+  dataSamp2$Class <- as.factor(as.character(dataSamp2$Class))
+  fitGE2 <- randomForest(dataSamp2$Class ~ ., importance=TRUE, ntree=1000, data=dataSamp2)
+  
+  a <- rownames(head(importance(fitGE1)))
+  b <- rownames(head(importance(fitGE2)))
+  impGenes <- c(a,b)
+
+  impGenesData1 <- trainData[,c("Class", impGenes)]
+  impGenesData1$Class <- as.factor(as.character(impGenesData1$Class))
+
+  fitGE <- randomForest(impGenesData1$Class ~ ., importance=TRUE, ntree=1000, data=impGenesData1)
+
+  predClass1 <- predict(fitGE)
+  t1 <- table(predClass1, impGenesData1$Class)
+  correctRate1 <- (t1[1,1]+t1[2,2])/sum(t1)
+  
+  ## Test Data
+  predClass2 <- predict(fitGE, newdata = testData)
+  
+  impGenesData2 <- testData[,c("Class", impGenes)]
+  impGenesData2$Class <- as.factor(as.character(impGenesData2$Class))
+  
+  t2 <- table(predClass2, impGenesData2$Class)
+  correctRate2 <- (t2[1,1]+t2[2,2])/sum(t2)
+  
+  output <- list(correctRate1, correctRate2)
+  return(output)
+}
+```
+
+## Call RF correct rate function
+```{r}
+getRF(coloPVData, coloMergedData)
+
+getRF(epePVData, epeMergedData)
+
+getRF(smokePVData, smokeMergedData)
+
+getRF(lungPVData, lungMergedData)
+
+getRF(colPVData, colMergedData)
+
+getRF(fibPVData, fibMergedData)
+
+getRF(intPVData, intMergedData)
+
+getRF(desPVData, desMergedData)
 
 
 ```
