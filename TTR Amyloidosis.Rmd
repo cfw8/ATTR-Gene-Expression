@@ -12,13 +12,11 @@ editor_options:
 library(readr)
 library(dplyr)
 library(ggplot2)
-# library(affy) # Probably don't need to use this, for raw data
-# mlr package
 
 setwd("~/Dropbox/Gene_Signatures_Code")
 ```
 
-## Read in data from directory & merge data files
+## Read in gene expression data from directory & merge with meta data 
 
 ```{r, echo=TRUE}
 geneExpressionData <- read_tsv("GSE67784.txt.gz")
@@ -39,7 +37,7 @@ metaData$Chromosome <- factor(metaData$Chromosome)
 # filteredMetaData$Chromosome <- factor(filteredMetaData$Chromosome)
 ```
 
-## Write a function to create separate datasets
+## Write a function to create separate datasets for Type (Asymptomatic, Symptomatic...)
 
 ```{r,}
 getClassData <- function(geneExpressionData, classFile) {
@@ -89,8 +87,7 @@ getSignificantGenes <- function(mergedData) {
 
 ```
 
-
-## Call Significant Genes function to get the most significant
+## Call Significant Genes function to get the the genes with the most significant p-values 
 
 ```{r}
 printGenes <- function(titlePrefix, mergedData, metaDataFrame) {
@@ -105,6 +102,7 @@ printGenes <- function(titlePrefix, mergedData, metaDataFrame) {
 }
 ```
 
+## Call print genes function
 
 ```{r}
 asymptomaticGenes <- printGenes("Asymptomatic", asymptomaticMergedData, metaData) 
@@ -114,7 +112,8 @@ onlycontrolsGenes <- printGenes("Only_Controls", onlycontrolsMergedData, metaDat
 
 ```
 
-## create a function that gets the proportion of significant genes for each chromosome
+## Create a function that finds the proportion of significant genes for each chromosome
+
 ```{r}
 createNewDF <- function(genesData) {
   newDataFrame <- subset(genesData, select=c("Chromosome", "Gene", "pValue"))
@@ -128,6 +127,7 @@ createNewDF <- function(genesData) {
 }
 ```
 
+## Create a function which makes a bar plot of the proportion
 
 ```{r}
 createBarPlot <- function(genesDF, prefix) {
@@ -143,6 +143,7 @@ createBarPlot <- function(genesDF, prefix) {
 
 ```
 
+## Call the function to find the proportion
 
 ```{r}
 asymptomaticNewDF <- createNewDF(asymptomaticGenes)
@@ -151,7 +152,7 @@ treatedNewDF <- createNewDF(treatedGenes)
 onlycontrolsNewDF <- createNewDF(onlycontrolsGenes)
 ```
 
-
+## Call the function to print the proportion bar plot
 
 ```{r}
 createBarPlot(asymptomaticNewDF, "Asymptomatic")
@@ -160,9 +161,8 @@ createBarPlot(treatedNewDF, "Treated")
 createBarPlot(onlycontrolsNewDF, "Controls")
 ```
 
-
+## Do some extra calculations to find the genes which are significant between all amyloidosis patients
 ```{r}
-# Find the genes which are significant between all amyloidosis patients
 impGenes <- inner_join(asymptomaticNewDF, symptomaticNewDF)
 impGenes2 <- inner_join(impGenes, treatedNewDF)
 
@@ -187,34 +187,13 @@ nrow(ocImpGenes)
 nrow(allImpGenes)
 ```
 
+## Plot histogram of p-values
 
 ```{r}
-#plot histogram of p-values
 hist(asymptomaticGenes$pValue, main=paste("Asymptomatic", "P-Values"), xlab = "P-Values")
 hist(symptomaticGenes$pValue, main=paste("Symptomatic", "P-Values"), xlab = "P-Values")
 hist(treatedGenes$pValue, main=paste("Treated", "P-Values"), xlab = "P-Values")
 hist(onlycontrolsGenes$pValue, main=paste("Controls", "P-Values"), xlab = "P-Values")
 ```
 
-# After Gastric dataset. Talk to Dr. Piccolo, one of his grad students or someone who can tell us if it's paper-worthy.
-# Continue on to all data sets, any patterns? See anything?
-# If not, is there a different question we can ask?
-# Look at other papers about gender genetic differences
-
-
-```{r}
-tmp <- inner_join(impGenes3, genderNewDF[which(genderNewDF$pValue=="Yes"),])
-```
-
-
-## Try Later 
-```{r}
-geneExpressionData <- getGeneData("GSE37147.txt.gz")
-genderData <- getGenderData("Class/GSE37147__gender.txt")
-smokeMergedData <- inner_join(genderData, geneExpressionData)
-
-smokeNewDF <- createNewDF("Smoker", smokeMergedData, metaData)
-createBarPlot("Smoker", smokeMergedData, filteredMetaData)
-
-```
 
