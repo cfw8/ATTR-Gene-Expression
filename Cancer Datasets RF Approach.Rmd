@@ -9,11 +9,12 @@ library(readr)
 library(dplyr)
 library(ggplot2)
 library(randomForest) 
+
 setwd("~/Dropbox/Gene_Signatures_Code")
 ```
 
 
-## Read in data from directory & merge data files
+## Read in data from directory & merge with meta data
 ```{r, echo=TRUE}
 getGeneData <- function(data) {
   geneExpressionData <- read_tsv(data)
@@ -39,7 +40,7 @@ filteredMetaData$Chromosome <- factor(as.numeric(filteredMetaData$Chromosome))
 ```
 
 
-## Merge Class column
+## Merge with Class column
 ```{r}
 getGenderData <- function(data) {
   genderData <- data.frame(read_tsv(data))
@@ -51,7 +52,6 @@ getGenderData <- function(data) {
   return(genderData)
 }
 ```
-
 
 
 ## Read in Data
@@ -99,7 +99,7 @@ desMergedData <- inner_join(genderData, geneExpressionData)
 ```
 
 
-## Get p-values 
+## Get p-values using ANOVA
 ```{r}
 getPValue <- function(data) {
   nGenes <- ncol(data) - 2
@@ -121,7 +121,7 @@ getPValue <- function(data) {
 ```
 
 
-## Assign PValues to Genes
+## Associate p-values with their genes
 ```{r}
 assignPValues <- function(data) {
   geneNames <- colnames(data)[3:(ncol(data))] 
@@ -129,7 +129,8 @@ assignPValues <- function(data) {
   pv <- getPValue(data)
   pValueData <- data.frame(Gene=geneNames, pv)  # class
   pValueData$Gene <- as.character(pValueData$Gene)
-
+  
+  # Use filtered metadata because we don't want to use X and Y-linked genes
   pValueDF <- inner_join(filteredMetaData, pValueData)
   pValueDF <- arrange(pValueDF, pv)
   colnames(pValueDF)[4] <- "PValue"
@@ -138,7 +139,7 @@ assignPValues <- function(data) {
 ```
 
 
-## get pvalue dfs
+## Call function to get pvalue dfs
 ```{r}
 coloPVData <- assignPValues(coloMergedData)
 epePVData <- assignPValues(epeMergedData)
@@ -192,24 +193,18 @@ getRate(desPVData, desMergedData)
 # var(rateVector)
 ```
 
-#####
-DO THIS NEXT PART START TO FINISH 5 TIMES
-#####
 
 ## Splitting the data into training and test data
 ```{r}
 splitdf <- function(data) {
     index <- 1:nrow(data)
-    trainindex <- sample(index, trunc(length(index)/2))
+    trainindex <- sample(index, length(index)*.7)
     trainset <- data[trainindex, ]
     testset <- data[-trainindex, ]
     res <- list(trainset=trainset,testset=testset)
     return(res)
 }
 ```
-
-
-
 
 
 ## RF Using Training and Testing Data
@@ -254,35 +249,39 @@ getRF <- function(PVData, mergedData) {
   t2 <- table(predClass2, impGenesData2$Class)
   correctRate2 <- (t2[1,1]+t2[2,2])/sum(t2)
   
-  output <- list(correctRate1, correctRate2)
+  output <- c(correctRate1, correctRate2, impGenes)
   return(output)
 }
 ```
 
 ## Call RF correct rate function
 ```{r}
-getRF(coloPVData, coloMergedData)
+# I started using 70-30 (training-test) for colon cancer and down, 50-50(training-test) for everything before
+coloResults <- NULL
+epeResults <- NULL
+smokeResults <- NULL
+lungResults <- NULL
+colResults <- NULL
+fibResults <- NULL
+intResults <- NULL
+desResults <- NULL
 
-getRF(epePVData, epeMergedData)
+for (i in 1:5) {
+  coloResults[[i]] <- getRF(coloPVData, coloMergedData)   ### 52-70%
+  epeResults[[i]] <- getRF(epePVData, epeMergedData)  ### Barely more than half the time
+  smokeResults[[i]] <- getRF(smokePVData, smokeMergedData)
+  lungResults[[i]] <- getRF(lungPVData, lungMergedData)
+  colResults[[i]] <- getRF(colPVData, colMergedData)
+  fibResults[[i]] <- getRF(fibPVData, fibMergedData)
+  intResults[[i]] <- getRF(intPVData, intMergedData)
+  desResults[[i]] <- getRF(desPVData, desMergedData)
 
-getRF(smokePVData, smokeMergedData)
-
-getRF(lungPVData, lungMergedData)
-
-getRF(colPVData, colMergedData)
-
-getRF(fibPVData, fibMergedData)
-
-getRF(intPVData, intMergedData)
-
-getRF(desPVData, desMergedData)
-
-
+}
 ```
 
 
 
-## OSCC
+## OSCC (Still in progress, but putting on hold)
 ```{r}
 geneExpressionData <- getGeneData("GSE30784.txt.gz")
 geneExpressionData <- na.omit(geneExpressionData)
