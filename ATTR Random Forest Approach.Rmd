@@ -7,7 +7,6 @@ output: html_document
 library(readr)
 library(dplyr)
 library(ggplot2)
-library(limma) # See if this reads our data, start playing around
 library(randomForest) 
 
 setwd("~/Dropbox/Gene_Signatures_Code")
@@ -72,9 +71,9 @@ colnames(controlsData)[1] <- "Type"
 
 combData <- rbind(asymptomaticData, symptomaticData, treatedData, controlsData)
 fullData <- inner_join(ageData, combData)
-# I don't have the age data for the treated patients
-```
 
+############### I don't have the age data for the treated patients #################
+```
 
 
 ## Get p-values for ANOVA
@@ -146,7 +145,6 @@ pValueDF6 <- inner_join(metaData, pValueData6)
 pValueDF6 <- arrange(pValueDF6, p6)
 colnames(pValueDF6)[4] <- "PValue"
 
-
 ```
 
 
@@ -197,7 +195,6 @@ var(rateVector1)
 ```
 
 
-
 ## Decision trees using random genes
 ```{r}
 getRate2 <- function() {
@@ -216,7 +213,6 @@ getRate2 <- function() {
 rateVector2 <- sapply(1:10, function(x) getRate2())
 var(rateVector2)
 ```
-
 
 
 ## Decision trees without gender
@@ -238,7 +234,6 @@ var(rateVector3)
 ```
 
 
-
 ## Decision Trees using a random sample and save each rate in a vector
 ```{r}
 getRate <- function() {
@@ -258,17 +253,17 @@ var(rateVector)
 ```
 
 
-
 ## Only predicting between control and asymptomatic
 ```{r}
 getRate <- function() {
-  samp <- sample(pValueDF1$Gene, 500)
+  pValueDF1$PValue <- pValueDF1$PValue[order(pValueDF1$PValue)]
+  sbst <- unique(pValueDF1$Gene[1:800])
   combDatasbst <- rbind(asymptomaticData, controlsData)
   fullDatasbst <- inner_join(ageData, combDatasbst)
-  fullDataSamp <- fullDatasbst[,c("age", "Class", "Type", samp)] 
+  fullDataSamp <- fullDatasbst[,c("age", "Class", "Type", sbst)] 
   fullDataSamp$Type <- as.factor(as.character(fullDataSamp$Type))
 
-  fitGE <- randomForest(fullDataSamp$Type ~ ., importance=TRUE, ntree=500, data=fullDataSamp)
+  fitGE <- randomForest(fullDataSamp$Type ~ ., importance=TRUE, ntree=1000, data=fullDataSamp)
   predType <- predict(fitGE)
   t <- table(predType, fullDataSamp$Type)
   correctRate <- (t[1,1]+t[2,2])/sum(t)
@@ -276,30 +271,5 @@ getRate <- function() {
 }
 getRate()
 ```
-
-
-
-
-
-
-## Limma package
-```{r}
-geneExpressionData2 <- ExpressionSet(t(as.matrix(geneExpressionData)))
-fit3 <- lmFit(geneExpressionData2, mat)
-
-mat <- model.matrix(~ aData$Class+aData$age) 
-fit <- lmFit(asymptomaticMergedData$ENSG00000000003, mat) # Adjust for age
-#fit <- lmFit(poly(asymptomaticMergedData$ENSG00000000003, degree=2))
-summary(fit)
-
-tstat.ord <- fit$coef/fit$stdev.unscaled/fit$sigma
-fit2 <- eBayes(fit) #The output from eBayes() contains s0^2 and d0 as fit$s2.prior and fit$df.prior and the ˜sj^2
-# as fit$s2.post
-topTable(fit)
-# decideTests() # input object is a matrix of p-values
-
-#plot(asymptomaticMergedData$Class, asymptomaticMergedData$ENSG00000000003, ylab = "Expression", xlab = "Class", pch = 19)
-```
-
 
 
